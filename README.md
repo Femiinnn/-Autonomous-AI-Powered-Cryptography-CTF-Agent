@@ -10,6 +10,7 @@ Crypto CTF Agent is an AI-powered cryptanalysis system designed to analyze and s
 - Llama 3.1 8B Instruct – AI-powered reasoning and analysis
 - Docker – Isolated execution environment
 - SageMath – Advanced mathematical and cryptographic operations
+- CrackStation - Detect and decode hash
 
  🎯 Project Aim
 
