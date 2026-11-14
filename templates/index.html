@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CryptoAgent — Autonomous CTF Cryptanalysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" />
+  <style>
+/* ══════════════════════════════════════════════════════════════════════════
+   RESET & TOKENS
+══════════════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink-0:#07080d;
+  --ink-1:#0d0f18;
+  --ink-2:#111520;
+  --ink-3:#181d2e;
+  --ink-4:#1f2640;
+  --ink-5:#2a3352;
+
+  --violet:#7c3aed;
+  --violet-l:#9d64f8;
+  --violet-ll:#c4a0ff;
+  --cyan:#06b6d4;
+  --cyan-l:#22d3ee;
+  --emerald:#10b981;
+  --emerald-l:#34d399;
+  --rose:#f43f5e;
+  --amber:#f59e0b;
+
+  --text-1:#f1f5f9;
+  --text-2:#94a3b8;
+  --text-3:#475569;
+
+  --radius-sm:8px;
+  --radius-md:14px;
+  --radius-lg:20px;
+  --radius-xl:28px;
+
+  --glow-v:0 0 40px rgba(124,58,237,.35);
+  --glow-c:0 0 40px rgba(6,182,212,.35);
+  --glow-e:0 0 40px rgba(16,185,129,.5);
+
+  --transition:.2s cubic-bezier(.4,0,.2,1);
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--ink-0);
+  color:var(--text-1);
+  min-height:100vh;
+  overflow-x:hidden;
+  line-height:1.6;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BACKGROUND
+══════════════════════════════════════════════════════════════════════════ */
+.bg-layer{
+  position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;
+}
+.orb{
+  position:absolute;border-radius:50%;filter:blur(120px);opacity:.18;
+  animation:drift 18s ease-in-out infinite alternate;
+}
+.orb-1{width:600px;height:600px;top:-200px;left:-150px;
+  background:radial-gradient(circle,var(--violet) 0%,transparent 70%);
+  animation-duration:20s;}
+.orb-2{width:500px;height:500px;top:30%;right:-200px;
+  background:radial-gradient(circle,var(--cyan) 0%,transparent 70%);
+  animation-duration:25s;animation-delay:-8s;}
+.orb-3{width:400px;height:400px;bottom:-100px;left:30%;
+  background:radial-gradient(circle,#3730a3 0%,transparent 70%);
+  animation-duration:22s;animation-delay:-4s;}
+@keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(40px,30px) scale(1.08)}}
+
+.grid-overlay{
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    linear-gradient(rgba(148,163,184,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(148,163,184,.03) 1px,transparent 1px);
+  background-size:48px 48px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   NAVBAR
+══════════════════════════════════════════════════════════════════════════ */
+nav{
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(20px);
+  background:rgba(7,8,13,.7);
+  border-bottom:1px solid rgba(148,163,184,.08);
+  padding:0 32px;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.nav-logo{
+  display:flex;align-items:center;gap:10px;
+  font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;
+  color:var(--text-1);letter-spacing:-.3px;
+}
+.nav-logo-icon{
+  width:32px;height:32px;border-radius:8px;
+  background:linear-gradient(135deg,var(--violet),var(--cyan));
+  display:grid;place-items:center;font-size:16px;
+  box-shadow:0 2px 12px rgba(124,58,237,.4);
+}
+.nav-links{display:flex;align-items:center;gap:8px;}
+.nav-badge{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:999px;
+  border:1px solid rgba(148,163,184,.12);
+  background:rgba(255,255,255,.03);
+  font-size:12px;font-weight:500;color:var(--text-2);
+  text-decoration:none;transition:var(--transition);
+}
+.nav-badge:hover{border-color:rgba(148,163,184,.25);color:var(--text-1);}
+.nav-badge svg{width:14px;height:14px;fill:currentColor;}
+.status-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--emerald);
+  box-shadow:0 0 8px var(--emerald);
+  animation:blink 2.4s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HERO
+══════════════════════════════════════════════════════════════════════════ */
+.hero{
+  position:relative;z-index:1;
+  text-align:center;
+  padding:72px 24px 56px;
+}
+.hero-pill{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 16px;border-radius:999px;margin-bottom:24px;
+  border:1px solid rgba(124,58,237,.35);
+  background:rgba(124,58,237,.1);
+  font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--violet-ll);
+}
+.hero h1{
+  font-size:clamp(32px,6vw,64px);font-weight:900;
+  letter-spacing:-2px;line-height:1.05;
+  background:linear-gradient(135deg,#fff 0%,var(--violet-ll) 50%,var(--cyan-l) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:20px;
+}
+.hero p{
+  font-size:clamp(15px,2vw,18px);color:var(--text-2);
+  max-width:600px;margin:0 auto 32px;font-weight:400;
+  line-height:1.7;
+}
+.hero-tags{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;}
+.htag{
+  padding:5px 14px;border-radius:999px;
+  border:1px solid rgba(148,163,184,.1);background:rgba(255,255,255,.03);
+  font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   STATS STRIP
+══════════════════════════════════════════════════════════════════════════ */
+.stats-strip{
+  position:relative;z-index:1;
+  display:flex;justify-content:center;gap:0;
+  margin:0 auto 48px;max-width:700px;
+  border:1px solid rgba(148,163,184,.08);
+  border-radius:var(--radius-md);overflow:hidden;
+  background:rgba(255,255,255,.02);backdrop-filter:blur(12px);
+}
+.stat{
+  flex:1;text-align:center;padding:20px 16px;
+  border-right:1px solid rgba(148,163,184,.08);
+}
+.stat:last-child{border-right:none;}
+.stat-num{
+  font-size:26px;font-weight:800;
+  font-family:'JetBrains Mono',monospace;
+  background:linear-gradient(135deg,var(--violet-l),var(--cyan));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.stat-label{font-size:11px;color:var(--text-3);font-weight:500;margin-top:3px;letter-spacing:.3px;text-transform:uppercase;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MAIN LAYOUT
+══════════════════════════════════════════════════════════════════════════ */
+.main{
+  position:relative;z-index:1;
+  display:grid;grid-template-columns:1fr 440px;
+  gap:20px;max-width:1180px;margin:0 auto;
+  padding:0 20px 100px;
+}
+@media(max-width:900px){.main{grid-template-columns:1fr;}}
+
+/* ── Panels ── */
+.panel{display:flex;flex-direction:column;gap:16px;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   GLASS CARDS
+══════════════════════════════════════════════════════════════════════════ */
+.card{
+  background:rgba(255,255,255,.028);
+  border:1px solid rgba(148,163,184,.09);
+  border-radius:var(--radius-lg);
+  backdrop-filter:blur(16px);
+  overflow:hidden;
+  transition:border-color var(--transition),box-shadow var(--transition);
+}
+.card:hover{border-color:rgba(148,163,184,.16);}
+.card-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 22px;
+  border-bottom:1px solid rgba(148,163,184,.07);
+}
+.card-head-left{display:flex;align-items:center;gap:12px;}
+.step-badge{
+  width:26px;height:26px;border-radius:7px;
+  display:grid;place-items:center;font-size:12px;font-weight:700;
+  font-family:'JetBrains Mono',monospace;
+  background:linear-gradient(135deg,var(--violet),var(--cyan));
+  color:#fff;flex-shrink:0;
+}
+.card-title{font-size:14px;font-weight:600;color:var(--text-1);}
+.card-sub{font-size:12px;color:var(--text-3);}
+.card-body{padding:20px 22px;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TEXTAREA
+══════════════════════════════════════════════════════════════════════════ */
+.field-wrap{position:relative;}
+.field-label{
+  font-size:12px;font-weight:600;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.5px;
+  margin-bottom:10px;display:block;
+}
+textarea{
+  width:100%;background:rgba(0,0,0,.3);
+  border:1px solid rgba(148,163,184,.1);border-radius:var(--radius-sm);
+  color:var(--text-1);font-family:'JetBrains Mono',monospace;font-size:13px;
+  padding:14px 16px;resize:vertical;min-height:180px;
+  outline:none;line-height:1.65;
+  transition:border-color var(--transition),box-shadow var(--transition);
+}
+textarea::placeholder{color:var(--text-3);}
+textarea:focus{
+  border-color:rgba(124,58,237,.5);
+  box-shadow:0 0 0 3px rgba(124,58,237,.12),inset 0 1px 2px rgba(0,0,0,.2);
+}
+.char-count{
+  position:absolute;bottom:12px;right:14px;
+  font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace;
+  pointer-events:none;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FILE UPLOAD
+══════════════════════════════════════════════════════════════════════════ */
+.upload-zone{
+  border:1.5px dashed rgba(148,163,184,.15);border-radius:var(--radius-md);
+  padding:28px 20px;text-align:center;
+  cursor:pointer;position:relative;
+  background:rgba(0,0,0,.2);
+  transition:all var(--transition);
+}
+.upload-zone:hover,.upload-zone.drag{
+  border-color:rgba(6,182,212,.4);background:rgba(6,182,212,.04);
+}
+.upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{
+  width:44px;height:44px;border-radius:var(--radius-sm);margin:0 auto 12px;
+  background:linear-gradient(135deg,rgba(124,58,237,.2),rgba(6,182,212,.2));
+  border:1px solid rgba(148,163,184,.1);
+  display:grid;place-items:center;font-size:20px;
+}
+.upload-label{font-size:14px;color:var(--text-2);margin-bottom:4px;}
+.upload-label b{color:var(--cyan-l);}
+.upload-hint{font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace;}
+
+.file-pill{
+  display:none;align-items:center;gap:10px;
+  margin-top:12px;padding:10px 14px;
+  background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);
+  border-radius:var(--radius-sm);
+}
+.file-pill.show{display:flex;}
+.file-pill-icon{font-size:18px;}
+.file-pill-name{font-size:13px;font-family:'JetBrains Mono',monospace;color:var(--emerald-l);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-pill-size{font-size:11px;color:var(--text-3);flex-shrink:0;}
+.file-clear{background:none;border:none;color:var(--rose);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px;transition:opacity var(--transition);}
+.file-clear:hover{opacity:.7;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CATEGORY GRID
+══════════════════════════════════════════════════════════════════════════ */
+.cat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+@media(max-width:600px){.cat-grid{grid-template-columns:repeat(2,1fr);}}
+.cat-card{
+  padding:14px 10px;border-radius:var(--radius-sm);
+  border:1px solid rgba(148,163,184,.08);background:rgba(0,0,0,.25);
+  text-align:center;cursor:pointer;
+  transition:all var(--transition);position:relative;overflow:hidden;
+}
+.cat-card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(6,182,212,.12));
+  opacity:0;transition:opacity var(--transition);
+}
+.cat-card:hover::before{opacity:1;}
+.cat-card:hover{border-color:rgba(148,163,184,.2);}
+.cat-card.active{
+  border-color:var(--violet);
+  background:rgba(124,58,237,.1);
+}
+.cat-card.active::before{opacity:1;}
+.cat-card input{display:none;}
+.cat-emoji{font-size:22px;display:block;margin-bottom:6px;}
+.cat-name{font-size:11px;font-weight:600;color:var(--text-2);letter-spacing:.3px;}
+.cat-card.active .cat-name{color:var(--violet-ll);}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ATTACK CHIPS
+══════════════════════════════════════════════════════════════════════════ */
+.attack-wrap{display:flex;flex-wrap:wrap;gap:7px;}
+.att-chip{
+  padding:6px 14px;border-radius:999px;cursor:pointer;
+  border:1px solid rgba(148,163,184,.1);background:rgba(0,0,0,.2);
+  font-size:12px;font-weight:500;color:var(--text-2);
+  transition:all var(--transition);white-space:nowrap;user-select:none;
+}
+.att-chip:hover{border-color:rgba(148,163,184,.25);color:var(--text-1);}
+.att-chip.active{
+  border-color:var(--cyan);background:rgba(6,182,212,.1);color:var(--cyan-l);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SUBMIT BUTTON
+══════════════════════════════════════════════════════════════════════════ */
+.btn-submit{
+  width:100%;padding:17px;border:none;border-radius:var(--radius-md);cursor:pointer;
+  font-family:'Inter',sans-serif;font-size:15px;font-weight:700;letter-spacing:.3px;
+  position:relative;overflow:hidden;
+  background:linear-gradient(135deg,var(--violet) 0%,#4f46e5 50%,var(--cyan) 100%);
+  color:#fff;
+  box-shadow:0 4px 24px rgba(124,58,237,.4),inset 0 1px 0 rgba(255,255,255,.15);
+  transition:transform var(--transition),box-shadow var(--transition),opacity var(--transition);
+}
+.btn-submit::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.12) 0%,transparent 50%);
+  pointer-events:none;
+}
+.btn-submit:hover:not(:disabled){
+  transform:translateY(-2px);
+  box-shadow:0 8px 40px rgba(124,58,237,.55),inset 0 1px 0 rgba(255,255,255,.15);
+}
+.btn-submit:active:not(:disabled){transform:translateY(0);}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed;}
+.btn-submit .btn-inner{display:flex;align-items:center;justify-content:center;gap:10px;}
+.btn-icon{font-size:18px;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SPINNER
+══════════════════════════════════════════════════════════════════════════ */
+.spinner{
+  width:16px;height:16px;border-radius:50%;
+  border:2.5px solid rgba(255,255,255,.3);border-top-color:#fff;
+  animation:spin .65s linear infinite;display:none;
+}
+.loading .spinner{display:block;}
+.loading .btn-icon{display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RIGHT PANEL (sticky on desktop)
+══════════════════════════════════════════════════════════════════════════ */
+.right-panel{
+  position:sticky;top:76px;height:fit-content;
+  display:flex;flex-direction:column;gap:16px;
+}
+@media(max-width:900px){.right-panel{position:static;}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PROGRESS TRACKER
+══════════════════════════════════════════════════════════════════════════ */
+.progress-card{transition:all var(--transition);}
+.steps-row{
+  display:flex;align-items:center;
+  padding:20px 22px;gap:0;
+}
+.step-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  position:relative;
+}
+.step-item:not(:last-child)::after{
+  content:'';
+  position:absolute;top:14px;left:50%;
+  width:100%;height:2px;
+  background:rgba(148,163,184,.1);
+  transition:background .5s ease;
+  z-index:0;
+}
+.step-item.done:not(:last-child)::after{
+  background:linear-gradient(90deg,var(--emerald),var(--emerald-l));
+}
+.step-item.active:not(:last-child)::after{
+  background:linear-gradient(90deg,var(--violet),rgba(148,163,184,.1));
+}
+.step-node{
+  width:28px;height:28px;border-radius:50%;z-index:1;
+  display:grid;place-items:center;
+  border:2px solid rgba(148,163,184,.2);background:var(--ink-2);
+  font-size:11px;font-weight:700;color:var(--text-3);
+  font-family:'JetBrains Mono',monospace;
+  transition:all .3s ease;
+}
+.step-item.active .step-node{
+  border-color:var(--violet);background:rgba(124,58,237,.2);color:var(--violet-ll);
+  box-shadow:0 0 0 4px rgba(124,58,237,.15),0 0 20px rgba(124,58,237,.4);
+  animation:step-pulse 1.2s ease infinite;
+}
+.step-item.done .step-node{
+  border-color:var(--emerald);background:rgba(16,185,129,.15);color:var(--emerald-l);
+  box-shadow:0 0 16px rgba(16,185,129,.3);
+}
+.step-item.done .step-node::before{content:'✓';}
+@keyframes step-pulse{
+  0%,100%{box-shadow:0 0 0 4px rgba(124,58,237,.15),0 0 20px rgba(124,58,237,.4)}
+  50%{box-shadow:0 0 0 6px rgba(124,58,237,.08),0 0 30px rgba(124,58,237,.55)}
+}
+.step-lbl{font-size:10px;color:var(--text-3);margin-top:7px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;}
+.step-item.active .step-lbl{color:var(--violet-ll);}
+.step-item.done .step-lbl{color:var(--emerald);}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TERMINAL
+══════════════════════════════════════════════════════════════════════════ */
+.term-wrap{
+  background:#050609;border-radius:0 0 var(--radius-lg) var(--radius-lg);
+  overflow:hidden;
+}
+.term-topbar{
+  display:flex;align-items:center;gap:7px;
+  padding:10px 14px;background:#0a0b10;border-bottom:1px solid rgba(148,163,184,.06);
+}
+.term-dot{width:11px;height:11px;border-radius:50%;}
+.term-dot-r{background:#ff5f56;}
+.term-dot-y{background:#ffbd2e;}
+.term-dot-g{background:#27c93f;}
+.term-title{font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace;margin-left:6px;}
+.terminal{
+  height:260px;overflow-y:auto;
+  padding:14px 16px;
+  font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.75;
+}
+.terminal::-webkit-scrollbar{width:3px;}
+.terminal::-webkit-scrollbar-thumb{background:rgba(148,163,184,.15);border-radius:2px;}
+.tl{display:flex;gap:8px;}
+.ts{color:var(--text-3);flex-shrink:0;font-size:11px;padding-top:1px;}
+.tm{flex:1;}
+.tl.t-step .tm{color:var(--violet-ll);font-weight:600;}
+.tl.t-ok   .tm{color:var(--emerald-l);}
+.tl.t-err  .tm{color:var(--rose);}
+.tl.t-flag .tm{color:var(--amber);font-weight:700;}
+.tl.t-info .tm{color:var(--text-2);}
+.caret{display:inline-block;width:7px;height:13px;background:var(--emerald);margin-left:2px;vertical-align:middle;animation:caret-blink .9s step-end infinite;}
+@keyframes caret-blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   IDLE PLACEHOLDER
+══════════════════════════════════════════════════════════════════════════ */
+.idle-placeholder{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:260px;gap:14px;
+}
+.idle-icon{
+  width:60px;height:60px;border-radius:var(--radius-md);
+  background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(6,182,212,.12));
+  border:1px solid rgba(148,163,184,.1);
+  display:grid;place-items:center;font-size:28px;
+}
+.idle-title{font-size:14px;font-weight:600;color:var(--text-2);}
+.idle-sub{font-size:12px;color:var(--text-3);text-align:center;max-width:220px;line-height:1.6;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FLAG RESULT
+══════════════════════════════════════════════════════════════════════════ */
+#result-card{display:none;}
+.flag-reveal{
+  padding:28px 22px;
+  background:linear-gradient(135deg,rgba(16,185,129,.08),rgba(6,182,212,.05));
+  border-bottom:1px solid rgba(16,185,129,.15);
+  position:relative;overflow:hidden;
+}
+.flag-reveal::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at top left,rgba(16,185,129,.12),transparent 60%);
+  pointer-events:none;
+}
+.flag-reveal.failed{
+  background:linear-gradient(135deg,rgba(244,63,94,.08),rgba(124,58,237,.05));
+  border-color:rgba(244,63,94,.2);
+}
+.flag-reveal.failed::before{
+  background:radial-gradient(ellipse at top left,rgba(244,63,94,.1),transparent 60%);
+}
+.flag-eyebrow{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;}
+.flag-emoji-big{font-size:36px;display:block;margin-bottom:12px;animation:flag-pop .4s cubic-bezier(.34,1.56,.64,1) both;}
+@keyframes flag-pop{from{transform:scale(.4) rotate(-10deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+.flag-text{
+  font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;
+  color:var(--emerald-l);word-break:break-all;line-height:1.4;
+  text-shadow:0 0 20px rgba(52,211,153,.4);
+}
+.flag-text.failed-text{color:var(--rose);font-size:13px;font-weight:400;}
+.copy-row{display:flex;align-items:center;gap:10px;margin-top:16px;}
+.copy-btn{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 16px;border-radius:var(--radius-sm);
+  border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.1);
+  color:var(--emerald-l);font-size:12px;font-weight:600;cursor:pointer;
+  transition:all var(--transition);font-family:'Inter',sans-serif;
+}
+.copy-btn:hover{background:rgba(16,185,129,.2);border-color:rgba(16,185,129,.5);}
+
+/* ── Attack summary pills ── */
+.summary-row{
+  display:flex;flex-wrap:wrap;gap:7px;
+  padding:14px 22px;border-bottom:1px solid rgba(148,163,184,.07);
+}
+.sum-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 11px;border-radius:999px;font-size:11px;font-weight:600;
+}
+.sum-pill.cat{border:1px solid rgba(157,100,248,.3);background:rgba(157,100,248,.08);color:var(--violet-ll);}
+.sum-pill.atk{border:1px solid rgba(245,158,11,.3);background:rgba(245,158,11,.08);color:var(--amber);}
+.sum-pill.eng{border:1px solid rgba(6,182,212,.3);background:rgba(6,182,212,.08);color:var(--cyan-l);}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HASH / ENCODING ANALYSIS CARD
+══════════════════════════════════════════════════════════════════════════ */
+#hash-card{display:none;}
+.hash-card-inner{padding:20px 22px;}
+.hash-summary-banner{
+  border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;
+  background:linear-gradient(135deg,rgba(6,182,212,.07),rgba(124,58,237,.07));
+  border:1px solid rgba(6,182,212,.2);
+  font-size:13px;color:var(--cyan-l);line-height:1.6;font-weight:500;
+}
+.hash-double-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;
+  background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);
+  color:var(--amber);margin-left:8px;
+}
+.hash-layers-wrap{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.hash-layer{
+  border-radius:var(--radius-sm);
+  border:1px solid rgba(148,163,184,.1);
+  background:rgba(0,0,0,.2);
+  overflow:hidden;
+}
+.hash-layer-head{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 14px;background:rgba(255,255,255,.025);
+  border-bottom:1px solid rgba(148,163,184,.07);
+}
+.hash-layer-num{
+  font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;
+  background:rgba(124,58,237,.2);border:1px solid rgba(124,58,237,.35);
+  color:var(--violet-ll);font-family:'JetBrains Mono',monospace;
+}
+.hash-layer-enc{
+  font-size:12px;font-weight:600;color:var(--text-1);flex:1;
+}
+.hash-layer-conf{
+  font-size:10px;color:var(--text-3);font-weight:500;
+}
+.hash-is-hash-badge{
+  font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600;
+  background:rgba(244,63,94,.12);border:1px solid rgba(244,63,94,.3);color:var(--rose);
+}
+.hash-layer-body{
+  padding:10px 14px;
+}
+.hash-decoded-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--text-3);margin-bottom:5px;
+}
+.hash-decoded-val{
+  font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--emerald-l);
+  word-break:break-all;line-height:1.6;
+  background:rgba(16,185,129,.04);padding:8px 10px;border-radius:6px;
+  border:1px solid rgba(16,185,129,.12);max-height:120px;overflow-y:auto;
+}
+.hash-decoded-val.is-hash{color:var(--rose);background:rgba(244,63,94,.04);border-color:rgba(244,63,94,.12);}
+.hash-algos-row{
+  display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;
+}
+.hash-algo-chip{
+  font-size:10px;padding:2px 9px;border-radius:999px;font-weight:600;font-family:'JetBrains Mono',monospace;
+  background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);color:var(--amber);
+}
+.hash-final-wrap{
+  margin-top:14px;padding-top:14px;border-top:1px solid rgba(148,163,184,.08);
+}
+.hash-final-label{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:var(--text-3);margin-bottom:7px;display:flex;align-items:center;gap:6px;
+}
+.hash-final-val{
+  font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--emerald-l);
+  word-break:break-all;line-height:1.6;
+  background:rgba(16,185,129,.06);padding:10px 12px;border-radius:var(--radius-sm);
+  border:1px solid rgba(16,185,129,.18);font-weight:600;
+}
+.hash-copy-btn{
+  margin-top:8px;display:flex;align-items:center;gap:5px;
+  padding:5px 12px;border-radius:var(--radius-sm);
+  border:1px solid rgba(16,185,129,.25);background:rgba(16,185,129,.07);
+  color:var(--emerald-l);font-size:11px;font-weight:600;cursor:pointer;
+  transition:all var(--transition);font-family:'Inter',sans-serif;
+}
+.hash-copy-btn:hover{background:rgba(16,185,129,.15);}
+.hash-substr-wrap{margin-top:14px;padding-top:14px;border-top:1px solid rgba(148,163,184,.08);}
+.hash-substr-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin-bottom:8px;}
+.hash-substr-item{
+  margin-bottom:7px;padding:9px 12px;border-radius:var(--radius-sm);
+  background:rgba(0,0,0,.2);border:1px solid rgba(148,163,184,.08);
+  font-size:11px;font-family:'JetBrains Mono',monospace;line-height:1.65;
+}
+.hash-substr-orig{color:var(--text-3);margin-bottom:3px;word-break:break-all;}
+.hash-substr-dec{color:var(--cyan-l);word-break:break-all;}
+
+/* ── Code viewer ── */
+.code-viewer{background:#050609;}
+.code-topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:#0d0f18;border-top:1px solid rgba(148,163,184,.07);
+}
+.code-lang{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--violet-ll);font-weight:600;}
+.code-copy{
+  background:none;border:1px solid rgba(148,163,184,.12);border-radius:5px;
+  color:var(--text-3);font-size:11px;padding:4px 10px;cursor:pointer;
+  transition:all var(--transition);font-family:'Inter',sans-serif;
+}
+.code-copy:hover{border-color:rgba(148,163,184,.25);color:var(--text-2);}
+.code-viewer pre{
+  margin:0!important;padding:16px!important;
+  max-height:320px;overflow-y:auto;
+  font-size:12px!important;line-height:1.65!important;
+  background:transparent!important;
+}
+.code-viewer pre::-webkit-scrollbar{width:3px;}
+.code-viewer pre::-webkit-scrollbar-thumb{background:rgba(148,163,184,.15);border-radius:2px;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   HOW IT WORKS (bottom strip)
+══════════════════════════════════════════════════════════════════════════ */
+.how-section{
+  position:relative;z-index:1;
+  max-width:1180px;margin:0 auto;padding:0 20px 80px;
+}
+.how-heading{
+  font-size:22px;font-weight:800;text-align:center;
+  letter-spacing:-.5px;margin-bottom:32px;color:var(--text-1);
+}
+.how-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+.how-card{
+  padding:24px 20px;border-radius:var(--radius-md);
+  border:1px solid rgba(148,163,184,.08);background:rgba(255,255,255,.025);
+  backdrop-filter:blur(10px);
+  transition:border-color var(--transition),transform var(--transition);
+}
+.how-card:hover{border-color:rgba(148,163,184,.18);transform:translateY(-3px);}
+.how-num{
+  font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--violet);margin-bottom:16px;font-family:'JetBrains Mono',monospace;
+}
+.how-icon{font-size:28px;margin-bottom:12px;display:block;}
+.how-title{font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:8px;}
+.how-desc{font-size:13px;color:var(--text-2);line-height:1.65;}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DIVIDER
+══════════════════════════════════════════════════════════════════════════ */
+.section-divider{
+  position:relative;z-index:1;
+  max-width:1180px;margin:0 auto 48px;padding:0 20px;
+  display:flex;align-items:center;gap:16px;
+}
+.section-divider::before,.section-divider::after{
+  content:'';flex:1;height:1px;background:rgba(148,163,184,.08);
+}
+.section-divider span{font-size:12px;color:var(--text-3);font-weight:600;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;}
+  </style>
+</head>
+<body>
+
+<!-- ── Background Layers ──────────────────────────────────────────────────── -->
+<div class="bg-layer">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div class="grid-overlay"></div>
+
+<!-- ── Navbar ─────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🔐</div>
+    CryptoAgent
+  </div>
+  <div class="nav-links">
+    <div style="display:flex;align-items:center;gap:6px;margin-right:4px;">
+      <div class="status-dot"></div>
+      <span style="font-size:12px;color:var(--text-2);">Agent Online</span>
+    </div>
+    <a class="nav-badge" href="https://github.com/Femiinnn/Autonomous-AI-Powered-Cryptography-CTF-Agent" target="_blank">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<!-- ── Hero ───────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-pill">⚡ Powered by Llama-3 · LangGraph · GRPO-RL</div>
+  <h1>Autonomous Crypto<br/>CTF Solver</h1>
+  <p>Paste a cryptographic challenge. The AI agent classifies the vulnerability, generates an exploit, and executes it in a secure sandbox — automatically.</p>
+  <div class="hero-tags">
+    <span class="htag">RSA · AES · ECC · Lattice</span>
+    <span class="htag">Wiener · Fermat · Common Modulus</span>
+    <span class="htag">Docker Sandbox</span>
+    <span class="htag">SageMath Engine</span>
+    <span class="htag">Self-correcting Loop</span>
+  </div>
+</section>
+
+<!-- ── Stats Strip ────────────────────────────────────────────────────────── -->
+<div class="stats-strip">
+  <div class="stat"><div class="stat-num">9+</div><div class="stat-label">Attack Types</div></div>
+  <div class="stat"><div class="stat-num">4</div><div class="stat-label">Retry Loops</div></div>
+  <div class="stat"><div class="stat-num">300</div><div class="stat-label">Training Samples</div></div>
+  <div class="stat"><div class="stat-num">RL</div><div class="stat-label">GRPO Trained</div></div>
+</div>
+
+<!-- ── Main Grid ──────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Left Panel: Inputs -->
+  <div class="panel" id="left-panel">
+
+    <!-- Challenge Input -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-left">
+          <div class="step-badge">01</div>
+          <div>
+            <div class="card-title">Challenge Input</div>
+            <div class="card-sub">Paste ciphertext, parameters, or attach a file</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <label class="field-label">Challenge Description</label>
+        <div class="field-wrap">
+          <textarea id="challenge-text"
+            placeholder="RSA Challenge:&#10;N = 182198...&#10;e = 657351...&#10;c = 920471...&#10;&#10;Recover the hidden flag."></textarea>
+          <span class="char-count" id="char-count">0 chars</span>
+        </div>
+
+        <label class="field-label" style="margin-top:18px;">Attach File <span style="color:var(--text-3);font-weight:400;text-transform:none;font-size:11px;">(image, .txt, .pem, .enc, .py …)</span></label>
+        <div class="upload-zone" id="upload-zone">
+          <input type="file" id="file-input" accept=".txt,.py,.sage,.json,.pem,.enc,.log,.png,.jpg,.jpeg,.bmp,.gif,.webp" />
+          <div class="upload-icon">📎</div>
+          <div class="upload-label">Drop file here or <b>browse</b></div>
+          <div class="upload-hint">.txt · .py · .pem · .enc · .png · .jpg and more</div>
+        </div>
+        <div class="file-pill" id="file-pill">
+          <span class="file-pill-icon" id="file-icon">📄</span>
+          <span class="file-pill-name" id="file-name"></span>
+          <span class="file-pill-size" id="file-size"></span>
+          <button class="file-clear" id="file-clear">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Crypto Options -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-head-left">
+          <div class="step-badge">02</div>
+          <div>
+            <div class="card-title">Cryptographic Configuration</div>
+            <div class="card-sub">Optionally guide the agent's classification</div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <label class="field-label">Category</label>
+        <div class="cat-grid" id="cat-grid">
+          <label class="cat-card active" data-val="auto"><input type="radio" name="category" value="auto" checked /><span class="cat-emoji">🤖</span><span class="cat-name">Auto</span></label>
+          <label class="cat-card" data-val="RSA"><input type="radio" name="category" value="RSA" /><span class="cat-emoji">🔑</span><span class="cat-name">RSA</span></label>
+          <label class="cat-card" data-val="AES"><input type="radio" name="category" value="AES" /><span class="cat-emoji">🛡️</span><span class="cat-name">AES</span></label>
+          <label class="cat-card" data-val="ECC"><input type="radio" name="category" value="ECC" /><span class="cat-emoji">📐</span><span class="cat-name">ECC</span></label>
+          <label class="cat-card" data-val="Lattice"><input type="radio" name="category" value="Lattice" /><span class="cat-emoji">🕸️</span><span class="cat-name">Lattice</span></label>
+          <label class="cat-card" data-val="PRNG"><input type="radio" name="category" value="PRNG" /><span class="cat-emoji">🎲</span><span class="cat-name">PRNG</span></label>
+          <label class="cat-card" data-val="Hash"><input type="radio" name="category" value="Hash" /><span class="cat-emoji">🗜️</span><span class="cat-name">Hash</span></label>
+          <label class="cat-card" data-val="XOR"><input type="radio" name="category" value="XOR" /><span class="cat-emoji">⊕</span><span class="cat-name">XOR</span></label>
+          <label class="cat-card" data-val="Binary"><input type="radio" name="category" value="Binary" /><span class="cat-emoji">🔢</span><span class="cat-name">Binary</span></label>
+          <label class="cat-card" data-val="Encoding"><input type="radio" name="category" value="Encoding" /><span class="cat-emoji">🔡</span><span class="cat-name">Encoding</span></label>
+        </div>
+
+        <label class="field-label" style="margin-top:20px;">Attack Strategy</label>
+        <div class="attack-wrap" id="attack-wrap">
+          <div class="att-chip active" data-val="auto">🤖 Auto-Detect</div>
+          <div class="att-chip" data-val="Wiener Continued Fractions">📐 Wiener</div>
+          <div class="att-chip" data-val="Fermat Factorization">🔢 Fermat</div>
+          <div class="att-chip" data-val="Common Modulus Extended GCD">♾️ Common Modulus</div>
+          <div class="att-chip" data-val="Small Public Exponent Cube Root">³√ Small e</div>
+          <div class="att-chip" data-val="Boneh-Durfee Lattice">🧮 Boneh-Durfee</div>
+          <div class="att-chip" data-val="Padding Oracle">💊 Padding Oracle</div>
+          <div class="att-chip" data-val="Pohlig-Hellman">📈 Pohlig-Hellman</div>
+          <div class="att-chip" data-val="Frequency Analysis">🔡 Freq. Analysis</div>
+          <div class="att-chip" data-val="Single-Byte XOR Brute Force">⊕ Single-Byte XOR</div>
+          <div class="att-chip" data-val="Repeating-Key XOR Frequency Analysis">🔁 Repeating-Key XOR</div>
+          <div class="att-chip" data-val="Known-Plaintext XOR Key Recovery">🔓 XOR Known-PT</div>
+          <div class="att-chip" data-val="Many-Time Pad XOR">📑 Many-Time Pad</div>
+          <div class="att-chip" data-val="Binary String Decoding">01 Bin Decode</div>
+          <div class="att-chip" data-val="Bit Rotation Brute Force">🔄 Bit Rotation</div>
+          <div class="att-chip" data-val="LSB Oracle Bit Reconstruction">🔮 LSB Oracle</div>
+          <div class="att-chip" data-val="Base64 Decode">📦 Base64</div>
+          <div class="att-chip" data-val="Hex Decode">🔢 Hex Decode</div>
+          <div class="att-chip" data-val="Double Encoding Peel">🧅 Double Decode</div>
+          <div class="att-chip" data-val="Hash Identification">🔑 Hash ID</div>
+          <div class="att-chip" data-val="ROT13 / Caesar Shift">🔤 ROT13/Caesar</div>
+          <div class="att-chip" data-val="Morse Code Decode">📡 Morse</div>
+          <div class="att-chip" data-val="URL / HTML Decode">🌐 URL/HTML</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <button class="btn-submit" id="btn-submit">
+      <div class="btn-inner">
+        <div class="spinner" id="spinner"></div>
+        <span class="btn-icon">⚡</span>
+        <span id="btn-text">Launch Agent</span>
+      </div>
+    </button>
+
+  </div><!-- /left-panel -->
+
+  <!-- Right Panel: Live Results -->
+  <div class="right-panel">
+
+    <!-- Progress + Terminal -->
+    <div class="card progress-card" id="progress-card">
+      <div class="card-head">
+        <div class="card-head-left">
+          <div class="step-badge">03</div>
+          <div>
+            <div class="card-title">Agent Pipeline</div>
+            <div class="card-sub" id="pipeline-sub">Waiting for challenge…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Steps -->
+      <div class="steps-row">
+        <div class="step-item" id="s-classify">
+          <div class="step-node">1</div>
+          <div class="step-lbl">Classify</div>
+        </div>
+        <div class="step-item" id="s-generate">
+          <div class="step-node">2</div>
+          <div class="step-lbl">Generate</div>
+        </div>
+        <div class="step-item" id="s-execute">
+          <div class="step-node">3</div>
+          <div class="step-lbl">Execute</div>
+        </div>
+        <div class="step-item" id="s-result">
+          <div class="step-node">4</div>
+          <div class="step-lbl">Result</div>
+        </div>
+      </div>
+
+      <!-- Terminal -->
+      <div class="term-wrap">
+        <div class="term-topbar">
+          <div class="term-dot term-dot-r"></div>
+          <div class="term-dot term-dot-y"></div>
+          <div class="term-dot term-dot-g"></div>
+          <span class="term-title">agent.stdout — live</span>
+        </div>
+        <div class="terminal" id="terminal">
+          <div class="idle-placeholder" id="idle-ph">
+            <div class="idle-icon">🧠</div>
+            <div class="idle-title">Agent Standby</div>
+            <div class="idle-sub">Configure your challenge and hit Launch Agent to begin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flag Result Card -->
+    <div class="card" id="result-card">
+      <div class="flag-reveal" id="flag-reveal">
+        <div class="flag-eyebrow" id="flag-eyebrow">Captured Flag</div>
+        <span class="flag-emoji-big" id="flag-emoji">🚩</span>
+        <div class="flag-text" id="flag-text"></div>
+        <div class="copy-row" id="copy-row">
+          <button class="copy-btn" id="copy-btn">
+            <span>📋</span> Copy Flag
+          </button>
+        </div>
+      </div>
+      <div class="summary-row" id="summary-row" style="display:none"></div>
+      <div class="code-viewer" id="code-viewer" style="display:none">
+        <div class="code-topbar">
+          <span class="code-lang">python</span>
+          <button class="code-copy" id="code-copy">Copy code</button>
+        </div>
+        <pre><code class="language-python" id="exploit-code"></code></pre>
+      </div>
+    </div>
+
+    <!-- ── Hash / Encoding Analysis Card ─────────────────────────── -->
+    <div class="card" id="hash-card">
+      <div class="card-head">
+        <div class="card-head-left">
+          <div class="step-badge" style="background:linear-gradient(135deg,var(--cyan),var(--emerald))">🔎</div>
+          <div>
+            <div class="card-title">Hash &amp; Encoding Analysis</div>
+            <div class="card-sub" id="hash-card-sub">Auto-detected encoding layers</div>
+          </div>
+        </div>
+        <div id="hash-double-badge-top" style="display:none">
+          <span class="hash-double-badge">⚠️ Double Encoded</span>
+        </div>
+      </div>
+      <div class="hash-card-inner" id="hash-card-inner"><!-- filled by JS --></div>
+    </div>
+
+  </div><!-- /right-panel -->
+
+</div><!-- /main -->
+
+<!-- ── How it Works ───────────────────────────────────────────────────────── -->
+<div class="section-divider"><span>How It Works</span></div>
+<section class="how-section">
+  <div class="how-grid">
+    <div class="how-card">
+      <div class="how-num">Step 01</div>
+      <span class="how-icon">🔍</span>
+      <div class="how-title">Classify &amp; Plan</div>
+      <div class="how-desc">Llama-3 reads the challenge parameters, identifies the crypto category, pinpoints the mathematical flaw, and selects the optimal attack vector.</div>
+    </div>
+    <div class="how-card">
+      <div class="how-num">Step 02</div>
+      <span class="how-icon">⚙️</span>
+      <div class="how-title">Generate Exploit</div>
+      <div class="how-desc">The model writes a standalone Python or SageMath exploit script. If a previous attempt failed, the error is injected as feedback for self-correction.</div>
+    </div>
+    <div class="how-card">
+      <div class="how-num">Step 03</div>
+      <span class="how-icon">🐳</span>
+      <div class="how-title">Execute in Sandbox</div>
+      <div class="how-desc">Code runs inside an ephemeral Docker container (SageMath + gmpy2 + pwntools) with no network, memory limits, and a strict 30-second timeout.</div>
+    </div>
+    <div class="how-card">
+      <div class="how-num">Step 04</div>
+      <span class="how-icon">🚩</span>
+      <div class="how-title">Capture the Flag</div>
+      <div class="how-desc">The agent scans stdout for <code style="font-size:11px;color:var(--emerald-l)">flag{…}</code> patterns. On failure, it retries up to 4 times, re-hypothesizing the attack if needed.</div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script>
+/* ── Char counter ─────────────────────────────────────────────────────────── */
+const ta = document.getElementById('challenge-text');
+const cc = document.getElementById('char-count');
+ta.addEventListener('input', () => { cc.textContent = ta.value.length.toLocaleString() + ' chars'; });
+
+/* ── Category cards ───────────────────────────────────────────────────────── */
+document.getElementById('cat-grid').addEventListener('click', e => {
+  const card = e.target.closest('.cat-card');
+  if (!card) return;
+  document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('active'));
+  card.classList.add('active');
+  card.querySelector('input').checked = true;
+});
+
+/* ── Attack chips ─────────────────────────────────────────────────────────── */
+document.getElementById('attack-wrap').addEventListener('click', e => {
+  const chip = e.target.closest('.att-chip');
+  if (!chip) return;
+  document.querySelectorAll('.att-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+});
+function selectedAttack() {
+  return document.querySelector('.att-chip.active')?.dataset.val || 'auto';
+}
+function selectedCategory() {
+  return document.querySelector('.cat-card.active')?.dataset.val || 'auto';
+}
+
+/* ── File upload ──────────────────────────────────────────────────────────── */
+const uploadZone = document.getElementById('upload-zone');
+const fileInput  = document.getElementById('file-input');
+const filePill   = document.getElementById('file-pill');
+const fileName   = document.getElementById('file-name');
+const fileSize   = document.getElementById('file-size');
+const fileIcon   = document.getElementById('file-icon');
+const fileClear  = document.getElementById('file-clear');
+
+const IMG_EXTS = ['png','jpg','jpeg','bmp','gif','webp'];
+function fmt(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';}
+function showFile(f){
+  const ext = f.name.split('.').pop().toLowerCase();
+  fileIcon.textContent = IMG_EXTS.includes(ext) ? '🖼️' : '📄';
+  fileName.textContent = f.name;
+  fileSize.textContent = fmt(f.size);
+  filePill.classList.add('show');
+}
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) showFile(fileInput.files[0]); });
+fileClear.addEventListener('click', e => { e.stopPropagation(); fileInput.value=''; filePill.classList.remove('show'); });
+['dragenter','dragover'].forEach(ev => uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => uploadZone.addEventListener(ev, () => uploadZone.classList.remove('drag')));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = e.dataTransfer.files[0];
+  if (f) { try { fileInput.files = e.dataTransfer.files; } catch(_){} showFile(f); }
+});
+
+/* ── Terminal ─────────────────────────────────────────────────────────────── */
+const terminal = document.getElementById('terminal');
+const idlePh   = document.getElementById('idle-ph');
+let termStarted = false;
+
+function ts(){return new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function appendLog(msg, type='t-info'){
+  if (!termStarted) {
+    terminal.innerHTML = '';
+    termStarted = true;
+  }
+  const d = document.createElement('div');
+  d.className = `tl ${type}`;
+  d.innerHTML = `<span class="ts">${ts()}</span><span class="tm">${esc(msg)}</span>`;
+  terminal.appendChild(d);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function logType(msg){
+  const m = msg.toLowerCase();
+  if (m.includes('flag captured')||m.includes('🚩')) return 't-flag';
+  if (m.includes('step')||m.includes('classif')||m.includes('generat')||m.includes('execut')||m.includes('🔍')||m.includes('⚙️')||m.includes('🚀')) return 't-step';
+  if (m.includes('error')||m.includes('⚠️')||m.includes('failed')||m.includes('❌')) return 't-err';
+  if (m.includes('success')||m.includes('✅')||m.includes('output')) return 't-ok';
+  return 't-info';
+}
+
+/* ── Steps ────────────────────────────────────────────────────────────────── */
+const stepMap = {classify:'s-classify',generate:'s-generate',execute:'s-execute',result:'s-result'};
+let lastStep = null;
+const pipelineSub = document.getElementById('pipeline-sub');
+
+function setStepActive(key){
+  if (lastStep && lastStep !== key) setStepDone(lastStep);
+  const el = document.getElementById(stepMap[key]);
+  el.classList.add('active');
+  el.classList.remove('done');
+  lastStep = key;
+  const labels = {classify:'Classifying challenge…',generate:'Generating exploit…',execute:'Executing in sandbox…',result:'Finalizing result…'};
+  pipelineSub.textContent = labels[key] || '';
+}
+function setStepDone(key){
+  const el = document.getElementById(stepMap[key]);
+  el.classList.remove('active'); el.classList.add('done');
+  el.querySelector('.step-node').textContent = '✓';
+}
+function guessStep(msg){
+  const m = msg.toLowerCase();
+  if (m.includes('classif')||m.includes('step 1')) return 'classify';
+  if (m.includes('generat')||m.includes('step 2')) return 'generate';
+  if (m.includes('execut') ||m.includes('step 3')) return 'execute';
+  if (m.includes('flag')   ||m.includes('step 4')) return 'result';
+  return null;
+}
+
+/* ── Submit ───────────────────────────────────────────────────────────────── */
+const btnSubmit = document.getElementById('btn-submit');
+const btnText   = document.getElementById('btn-text');
+const spinner   = document.getElementById('spinner');
+const resultCard = document.getElementById('result-card');
+
+function setBusy(v){
+  btnSubmit.disabled = v;
+  spinner.style.display = v ? 'block' : 'none';
+  btnText.textContent = v ? 'Agent Running…' : 'Launch Agent';
+  document.querySelector('.btn-icon').style.display = v ? 'none' : 'block';
+}
+
+btnSubmit.addEventListener('click', async () => {
+  const text = ta.value.trim();
+  const file = fileInput.files[0];
+  if (!text && !file) {
+    ta.focus();
+    ta.style.borderColor='rgba(244,63,94,.5)';
+    setTimeout(()=>ta.style.borderColor='',2000);
+    return;
+  }
+
+  // Reset
+  termStarted = false;
+  terminal.innerHTML = '';
+  resultCard.style.display = 'none';
+  document.getElementById('hash-card').style.display = 'none';
+  ['s-classify','s-generate','s-execute','s-result'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('active','done');
+    el.querySelector('.step-node').textContent = id.slice(-1)==='y'?'1':id.slice(-2,-1)==='t'&&id.includes('resul')?'4':id.includes('gen')?'2':'3';
+  });
+  document.getElementById('s-classify').querySelector('.step-node').textContent = '1';
+  document.getElementById('s-generate').querySelector('.step-node').textContent = '2';
+  document.getElementById('s-execute').querySelector('.step-node').textContent = '3';
+  document.getElementById('s-result').querySelector('.step-node').textContent = '4';
+  lastStep = null;
+  pipelineSub.textContent = 'Sending challenge…';
+  setBusy(true);
+  appendLog('Sending challenge to agent…', 't-step');
+
+  // Scroll to progress
+  document.getElementById('progress-card').scrollIntoView({behavior:'smooth',block:'nearest'});
+
+  const fd = new FormData();
+  fd.append('challenge', text);
+  fd.append('category', selectedCategory());
+  fd.append('attack', selectedAttack());
+  if (file) fd.append('challenge_file', file);
+
+  let jobId;
+  try {
+    const r = await fetch('/solve', {method:'POST', body:fd});
+    const d = await r.json();
+    if (d.error) { appendLog('Error: ' + d.error, 't-err'); setBusy(false); return; }
+    jobId = d.job_id;
+  } catch(e) { appendLog('Network error: ' + e.message, 't-err'); setBusy(false); return; }
+
+  const sse = new EventSource('/stream/' + jobId);
+  sse.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'ping') return;
+    if (msg.type === 'log') {
+      const step = guessStep(msg.message);
+      if (step) setStepActive(step);
+      appendLog(msg.message, logType(msg.message));
+    }
+    if (msg.type === 'result') {
+      sse.close();
+      if (lastStep) setStepDone(lastStep);
+      setStepDone('result');
+      pipelineSub.textContent = msg.flag ? '✅ Flag captured!' : '⚠️ Solve failed';
+      showResult(msg);
+      setBusy(false);
+    }
+    if (msg.type === 'error') {
+      sse.close();
+      appendLog('Agent error: ' + msg.message, 't-err');
+      showFailed('Agent error: ' + msg.message);
+      setBusy(false);
+    }
+    if (msg.type === 'done') { sse.close(); setBusy(false); }
+  };
+  sse.onerror = () => { sse.close(); appendLog('Stream disconnected.','t-err'); setBusy(false); };
+});
+
+/* ── Show result ──────────────────────────────────────────────────────────── */
+function showResult(msg) {
+  resultCard.style.display = 'block';
+  resultCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  const reveal = document.getElementById('flag-reveal');
+  const emoji  = document.getElementById('flag-emoji');
+  const text   = document.getElementById('flag-text');
+  const copyRow = document.getElementById('copy-row');
+  const copyBtn = document.getElementById('copy-btn');
+  const eyebrow = document.getElementById('flag-eyebrow');
+  const sumRow  = document.getElementById('summary-row');
+  const codeViewer = document.getElementById('code-viewer');
+  const exploitCode = document.getElementById('exploit-code');
+
+  if (msg.flag) {
+    reveal.className = 'flag-reveal';
+    eyebrow.textContent = 'Captured Flag';
+    emoji.textContent = '🚩';
+    text.className = 'flag-text';
+    text.textContent = msg.flag;
+    copyRow.style.display = 'flex';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(msg.flag);
+      copyBtn.innerHTML = '<span>✅</span> Copied!';
+      setTimeout(() => copyBtn.innerHTML = '<span>📋</span> Copy Flag', 1800);
+    };
+    // summary pills
+    sumRow.innerHTML = '';
+    sumRow.style.display = 'flex';
+    if (selectedCategory() !== 'auto') sumRow.innerHTML += `<span class="sum-pill cat">🏷 ${selectedCategory()}</span>`;
+    if (selectedAttack()   !== 'auto') sumRow.innerHTML += `<span class="sum-pill atk">⚔️ ${selectedAttack()}</span>`;
+    sumRow.innerHTML += `<span class="sum-pill eng">🐍 Python</span>`;
+  } else {
+    showFailed('No flag found within retry limit.');
+  }
+
+  if (msg.code && msg.code.trim()) {
+    exploitCode.textContent = msg.code;
+    Prism.highlightElement(exploitCode);
+    codeViewer.style.display = 'block';
+    document.getElementById('code-copy').onclick = () => {
+      navigator.clipboard.writeText(msg.code);
+      document.getElementById('code-copy').textContent = 'Copied!';
+      setTimeout(() => document.getElementById('code-copy').textContent = 'Copy code', 1800);
+    };
+  }
+
+  // ── Hash / Encoding Analysis Card ───────────────────────────────────────
+  if (msg.hash_info) showHashCard(msg.hash_info);
+}
+
+function showFailed(msg) {
+  resultCard.style.display = 'block';
+  const reveal = document.getElementById('flag-reveal');
+  reveal.className = 'flag-reveal failed';
+  document.getElementById('flag-eyebrow').textContent = 'Result';
+  document.getElementById('flag-emoji').textContent = '❌';
+  const t = document.getElementById('flag-text');
+  t.className = 'flag-text failed-text';
+  t.textContent = msg || 'Failed to capture flag.';
+  document.getElementById('copy-row').style.display = 'none';
+  document.getElementById('summary-row').style.display = 'none';
+}
+
+/* ── Hash / Encoding Analysis Card renderer ───────────────────────────────── */
+function showHashCard(hi) {
+  const card   = document.getElementById('hash-card');
+  const inner  = document.getElementById('hash-card-inner');
+  const sub    = document.getElementById('hash-card-sub');
+  const dblBadge = document.getElementById('hash-double-badge-top');
+
+  if (!hi || (!hi.summary && !(hi.layers && hi.layers.length))) return;
+
+  card.style.display = 'block';
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  // Double-encoded badge
+  if (hi.is_double_encoded) {
+    dblBadge.style.display = 'block';
+    sub.textContent = 'Double encoding detected!';
+  } else {
+    dblBadge.style.display = 'none';
+    sub.textContent = `${hi.total_layers || 0} layer(s) analysed`;
+  }
+
+  let html = '';
+
+  // Summary banner
+  if (hi.summary) {
+    html += `<div class="hash-summary-banner">
+      🔎 ${esc(hi.summary)}
+      ${hi.is_double_encoded ? '<span class="hash-double-badge">⚠️ Double Encoded</span>' : ''}
+    </div>`;
+  }
+
+  // Layers
+  if (hi.layers && hi.layers.length) {
+    html += `<div class="hash-layers-wrap">`;
+    for (const layer of hi.layers) {
+      const isHash   = layer.is_hash;
+      const algos    = layer.hash_algos || [];
+      const decoded  = layer.decoded || '';
+      const enc      = layer.encoding || layer.type || '';
+      const conf     = layer.confidence || '';
+
+      html += `<div class="hash-layer">
+        <div class="hash-layer-head">
+          <span class="hash-layer-num">Layer ${layer.layer}</span>
+          <span class="hash-layer-enc">${esc(enc)}</span>
+          ${isHash ? '<span class="hash-is-hash-badge">🔒 Hash</span>' : ''}
+          <span class="hash-layer-conf">${esc(conf)}</span>
+        </div>
+        <div class="hash-layer-body">`;
+
+      if (isHash && algos.length) {
+        html += `<div class="hash-decoded-label">Possible Hash Algorithms</div>
+          <div class="hash-algos-row">
+            ${algos.map(a => `<span class="hash-algo-chip">${esc(a)}</span>`).join('')}
+          </div>
+          <div class="hash-decoded-val is-hash" style="margin-top:8px">
+            🔒 Hash is non-reversible — use hash cracking / rainbow table in the generated exploit.
+          </div>`;
+      } else if (decoded) {
+        html += `<div class="hash-decoded-label">Decoded Value</div>
+          <div class="hash-decoded-val">${esc(decoded)}</div>`;
+      } else {
+        html += `<div class="hash-decoded-val is-hash">No decoded output (plaintext or unknown format)</div>`;
+      }
+
+      html += `</div></div>`; // layer-body, layer
+    }
+    html += `</div>`; // layers-wrap
+  }
+
+  // Final decoded output
+  if (hi.final_decoded && hi.total_layers > 1) {
+    html += `<div class="hash-final-wrap">
+      <div class="hash-final-label">✅ Final Decoded Output</div>
+      <div class="hash-final-val" id="hash-final-val">${esc(hi.final_decoded)}</div>
+      <button class="hash-copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('hash-final-val').textContent).then(()=>{this.textContent='✅ Copied!';setTimeout(()=>this.textContent='📋 Copy Decoded',1600)})">
+        📋 Copy Decoded
+      </button>
+    </div>`;
+  } else if (hi.final_decoded && hi.total_layers === 1) {
+    const layer0 = (hi.layers || [])[0] || {};
+    if (!layer0.is_hash) {
+      html += `<div class="hash-final-wrap">
+        <div class="hash-final-label">✅ Decoded Output</div>
+        <div class="hash-final-val" id="hash-final-val">${esc(hi.final_decoded)}</div>
+        <button class="hash-copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('hash-final-val').textContent).then(()=>{this.textContent='✅ Copied!';setTimeout(()=>this.textContent='📋 Copy Decoded',1600)})">
+          📋 Copy Decoded
+        </button>
+      </div>`;
+    }
+  }
+
+  // Extracted substrings
+  if (hi.substrings && hi.substrings.length) {
+    html += `<div class="hash-substr-wrap">
+      <div class="hash-substr-label">🔍 Extracted Encoded Substrings (${hi.substrings.length})</div>`;
+    for (const sub of hi.substrings) {
+      html += `<div class="hash-substr-item">
+        <div class="hash-substr-orig">Input  [${esc(sub.encoding)}]: ${esc((sub.original||'').slice(0,80))}${(sub.original||'').length>80?'…':''}</div>
+        <div class="hash-substr-dec">→ ${esc((sub.final_decoded||sub.summary||'').slice(0,100))}${(sub.final_decoded||'').length>100?'…':''}</div>
+        ${sub.is_double_encoded ? '<div style="color:var(--amber);font-size:10px;margin-top:3px;">⚠️ Double encoded substring</div>' : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  inner.innerHTML = html;
+}
+</script>
+</body>
+</html>
